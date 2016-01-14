@@ -3,6 +3,7 @@
 import random
 import numpy
 import sys
+import copy
 
 class Organism:
   '''A class to contain an organism'''
@@ -43,11 +44,11 @@ class Organism:
       
 
   def mutate(self):
-    if random.random() < .02:
-      newGenome = self.genome
-      flipBit = random.randint(0, len(newGenome)-1)
-      newGenome[flipBit] = random.randint(0,1)
-      self.genome = newGenome
+    newGenome = self.genome
+    for i in range(len(newGenome)):
+      if random.random() < .002:
+        newGenome[i] = random.randint(0,1)
+    self.genome = newGenome
 
     
       
@@ -86,8 +87,6 @@ class Population:
     self.currentUpdate = 0
     self.orgs = []
     self.pop_size = popsize
-    self.vert_trans_count = 0
-    self.hor_trans_count = 0
     
 
     for i in range(popsize):
@@ -142,8 +141,21 @@ class Population:
       print "Error! No Org selected!"
     return fittest_org
 
-  def changeMetric(self):
+  def changeMetric(self, coal, history):
     '''Measuring the change potential in the population.'''
+    cur_pop = history[-1]
+    prev_pop = history[-2]
+    new_count = 0
+    for org_1 in cur_pop:
+      match = False
+      for org_2 in prev_pop:
+        if org_1.genome == org_2.genome:
+          match = True
+          break
+      if not match:
+        new_count += 1
+    return new_count
+
 
 if len(sys.argv) == 1 or sys.argv[1] == "--help":
   print "usage: pop_x pop_y seed"
@@ -153,22 +165,24 @@ else:
   random.seed(seed)
   numpy.random.seed(seed)
 
+  coalesce = 100
   num_updates = 20000
   pop_x = int(sys.argv[1])
   pop_y = int(sys.argv[2])
   pop_size = pop_x*pop_y
 
   data_file = open("test_"+str(seed)+".dat", 'w')
-  data_file.write("Update \n")
+  data_file.write("Update Change_Metric \n")
 
   history = []
   population_orgs = Population(pop_size)
-  history.append(population_orgs)
+  history.append(copy.deepcopy(population_orgs.orgs))
   for i in range(num_updates):
     population_orgs.update()
-    if i%100 == 0:
-      print "Update: ", i
-      data_file.write('{}\n'.format(i))
+    if i != 0 and (i%coalesce == 0):
+      history.append(copy.deepcopy(population_orgs.orgs))
+      change = population_orgs.changeMetric(coalesce, history)
+      data_file.write('{} {}\n'.format(i, change))
 
 
   data_file.close()
