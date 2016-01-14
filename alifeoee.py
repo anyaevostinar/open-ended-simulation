@@ -44,7 +44,7 @@ class Organism:
       
 
   def mutate(self):
-    newGenome = self.genome
+    newGenome = numpy.copy(self.genome)
     for i in range(len(newGenome)):
       if random.random() < .002:
         newGenome[i] = random.randint(0,1)
@@ -95,7 +95,7 @@ class Population:
   def makeOrg(self):
     '''A function to make a new organism randomly'''
     randomBitArray = numpy.random.randint(2, size=(100,))
-    newOrg = Organism(len(self.orgs), genome=list(randomBitArray))
+    newOrg = Organism(len(self.orgs), genome=randomBitArray)
     return newOrg
 
   def reproduceOrg(self, org):
@@ -141,7 +141,7 @@ class Population:
       print "Error! No Org selected!"
     return fittest_org
 
-  def changeMetric(self, coal, history):
+  def changeMetric(self, history):
     '''Measuring the change potential in the population.'''
     cur_pop = history[-1]
     prev_pop = history[-2]
@@ -149,12 +149,46 @@ class Population:
     for org_1 in cur_pop:
       match = False
       for org_2 in prev_pop:
-        if org_1.genome == org_2.genome:
+        if numpy.array_equal(org_1.genome, org_2.genome):
           match = True
           break
       if not match:
         new_count += 1
     return new_count
+
+  def noveltyMetric(self, history):
+    '''Measuring the novelty potential in the population.'''
+    cur_pop = history[-1]
+    new_count = 0
+    for org_1 in cur_pop:
+      match = False
+      for pop in range(len(history)-2, -1, -1):
+        prev_pop = history[pop]
+        for org_2 in prev_pop:
+          if numpy.array_equal(org_1.genome, org_2.genome):
+            match=True
+            break
+        if match:
+          break
+      if not match:
+        new_count +=1
+    return new_count
+
+  def changeAndNoveltyTest(self):
+    '''Verifies that Change and Novelty Metrics are working. 
+    Should print c: 1 n: 1, c: 1 n: 0, c: 1, n: 0'''
+    sample = [Organism(0,genome=numpy.array([0,0]))]
+    sample_2 = [Organism(0,genome=numpy.array([1,0]))]
+    sample_3 = [Organism(0,genome=numpy.array([0,0]))]
+    sample_4 = [Organism(0,genome=numpy.array([1,0]))]
+
+    history = [sample, sample_2, sample_3, sample_4]
+
+    test_pop = Population(0)
+    for j in range(2,5):
+      print "Change: ", test_pop.changeMetric(history[:j])
+      print "Novelty: ", test_pop.noveltyMetric(history[:j])
+
 
 
 if len(sys.argv) == 1 or sys.argv[1] == "--help":
@@ -165,24 +199,28 @@ else:
   random.seed(seed)
   numpy.random.seed(seed)
 
-  coalesce = 100
-  num_updates = 20000
+  coalesce = 10
+  num_updates = 2000
   pop_x = int(sys.argv[1])
   pop_y = int(sys.argv[2])
   pop_size = pop_x*pop_y
 
   data_file = open("test_"+str(seed)+".dat", 'w')
-  data_file.write("Update Change_Metric \n")
+  data_file.write("Update Change_Metric Novelty_Metric\n")
 
   history = []
   population_orgs = Population(pop_size)
   history.append(copy.deepcopy(population_orgs.orgs))
-  for i in range(num_updates):
+  for u in range(num_updates):
     population_orgs.update()
-    if i != 0 and (i%coalesce == 0):
+    if u != 0 and (u%coalesce == 0):
       history.append(copy.deepcopy(population_orgs.orgs))
       change = population_orgs.changeMetric(coalesce, history)
-      data_file.write('{} {}\n'.format(i, change))
+      novelty = population_orgs.noveltyMetric(coalesce, history)
+      data_file.write('{} {} {}\n'.format(u, change, novelty))
 
 
   data_file.close()
+
+
+
