@@ -46,8 +46,11 @@ class Organism:
   def mutate(self):
     newGenome = numpy.copy(self.genome)
     for i in range(len(newGenome)):
-      if random.random() < .002:
-        newGenome[i] = random.randint(0,1)
+      if random.random() < .007:
+        if newGenome[i] == 0:
+          newGenome[i] = 1
+        else:
+          newGenome[i] = 0
     self.genome = newGenome
 
     
@@ -87,6 +90,8 @@ class Population:
     self.currentUpdate = 0
     self.orgs = []
     self.pop_size = popsize
+    self.cur_persist = []
+    self.prev_persist = []
     
 
     for i in range(popsize):
@@ -141,14 +146,38 @@ class Population:
       print "Error! No Org selected!"
     return fittest_org
 
+  def getPersistentOrgs(self, history):
+    '''A helper function that figures out the genotypes that have persisted since coalescence time.'''
+    #We are assuming that the history orgs are saved every coalescence time because it is much easier.
+    cur_pop = history[-1]
+    cur_coal = history[-2]
+    prev_pop = history[-2]
+    if len(history)>2:
+      prev_coal = history[-3]
+    else:
+      prev_coal = history[-2]
+
+    for org_1 in cur_pop:
+      for org_2 in cur_coal:
+        if numpy.array_equal(org_1.genome, org_2.genome):
+          self.cur_persist.append(org_1)
+          break
+    for org_3 in prev_pop:
+      for org_4 in prev_coal:
+        if numpy.array_equal(org_3.genome, org_4.genome):
+          self.prev_persist.append(org_3)
+          break
+
+  
+
   def changeMetric(self, history):
     '''Measuring the change potential in the population.'''
-    cur_pop = history[-1]
-    prev_pop = history[-2]
+    self.getPersistentOrgs(history)
+
     new_count = 0
-    for org_1 in cur_pop:
+    for org_1 in self.cur_persist:
       match = False
-      for org_2 in prev_pop:
+      for org_2 in self.prev_persist:
         if numpy.array_equal(org_1.genome, org_2.genome):
           match = True
           break
@@ -156,8 +185,9 @@ class Population:
         new_count += 1
     return new_count
 
-  def noveltyMetric(self, history):
+  def noveltyMetric(self, history, gen_persist = True):
     '''Measuring the novelty potential in the population.'''
+    #There should probably be a coalescence calculation in here, but I have no idea how to do it.
     cur_pop = history[-1]
     new_count = 0
     for org_1 in cur_pop:
@@ -174,9 +204,33 @@ class Population:
         new_count +=1
     return new_count
 
-  def changeAndNoveltyTest(self):
-    '''Verifies that Change and Novelty Metrics are working. 
-    Should print c: 1 n: 1, c: 1 n: 0, c: 1, n: 0'''
+  def complexityMetric(self):
+    '''Measuring the complexity potential in the population.'''
+    #Normally we would count the length of skeletons, but that doesn't quite work with this system.
+    #Instead, I am going to count the number of 1's for now because they are what contributes to fitness.
+    #We can switch to true knockouts once we make a more complicated fitness structure.
+    most_complex = 0
+    for org in self.orgs:
+      total = numpy.sum(org.genome)
+      if total > most_complex:
+        most_complex = total
+    return total
+
+  def ecologyMetric(self):
+    '''Measuring the ecology potential in the population.'''
+    distinct_orgs = {}
+    for org in self.orgs:
+      string_genome = numpy.array_str(org.genome)
+      if string_genome not in distinct_orgs:
+        distinct_orgs[string_genome] = 1
+      else:
+        distinct_orgs[string_genome] += 1
+    return len(distinct_orgs)
+    
+
+  def noveltyTest(self):
+    '''Verifies that Novelty Metrics are working. 
+    Should print n: 1, n: 0, , n: 0'''
     sample = [Organism(0,genome=numpy.array([0,0]))]
     sample_2 = [Organism(0,genome=numpy.array([1,0]))]
     sample_3 = [Organism(0,genome=numpy.array([0,0]))]
@@ -186,7 +240,6 @@ class Population:
 
     test_pop = Population(0)
     for j in range(2,5):
-      print "Change: ", test_pop.changeMetric(history[:j])
       print "Novelty: ", test_pop.noveltyMetric(history[:j])
 
 
@@ -199,14 +252,14 @@ else:
   random.seed(seed)
   numpy.random.seed(seed)
 
-  coalesce = 10
-  num_updates = 2000
+  coalesce = 100
+  num_updates = 20000
   pop_x = int(sys.argv[1])
   pop_y = int(sys.argv[2])
   pop_size = pop_x*pop_y
 
   data_file = open("test_"+str(seed)+".dat", 'w')
-  data_file.write("Update Change_Metric Novelty_Metric\n")
+  data_file.write("Update Change_Metric Novelty_Metric Complexity_Metric Ecology_Metric\n")
 
   history = []
   population_orgs = Population(pop_size)
@@ -215,9 +268,11 @@ else:
     population_orgs.update()
     if u != 0 and (u%coalesce == 0):
       history.append(copy.deepcopy(population_orgs.orgs))
-      change = population_orgs.changeMetric(coalesce, history)
-      novelty = population_orgs.noveltyMetric(coalesce, history)
-      data_file.write('{} {} {}\n'.format(u, change, novelty))
+      change = population_orgs.changeMetric(history)
+      novelty = population_orgs.noveltyMetric(history)
+      complexity = population_orgs.complexityMetric()
+      ecology = population_orgs.ecologyMetric()
+      data_file.write('{} {} {} {} {}\n'.format(u, change, novelty, complexity, ecology))
 
 
   data_file.close()
