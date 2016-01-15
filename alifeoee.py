@@ -175,6 +175,7 @@ class Population:
       self.novel_orgs = self.novel_orgs | self.prev_persist
     else:
       self.novel_orgs = self.prev_persist
+
   
 
   def changeMetric(self, history):
@@ -231,6 +232,8 @@ def noveltyTest():
 
   test_pop = Population(0)
   for j in range(2,5):
+    test_pop.prev_persist = test_pop.cur_persist
+    test_pop.cur_persist = None
     print "Novelty: ", test_pop.noveltyMetric(history[:j])
 
 
@@ -252,7 +255,7 @@ else:
   data_file = open("test_"+str(seed)+".dat", 'w')
   data_file.write("Update Change_Metric Novelty_Metric Complexity_Metric Ecology_Metric\n")
 
-'''  history = []
+  history = []
   population_orgs = Population(pop_size)
   history.append(copy.deepcopy(population_orgs.orgs))
   for u in range(num_updates):
@@ -269,8 +272,6 @@ else:
 
 
   data_file.close()
-'''
 
-noveltyTest()
 
 
