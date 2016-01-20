@@ -219,7 +219,6 @@ class Population:
 
   def ecologyMetric(self):
     '''Measuring the ecology potential in the population.'''
-<<<<<<< HEAD
     distinct_orgs = {}
     for org in self.orgs:
       string_genome = numpy.array_str(org.genome)
