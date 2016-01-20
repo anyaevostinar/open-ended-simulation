@@ -35,6 +35,12 @@ class Organism:
     info = "empty: " + str(self.empty) + ", ID: " + str(self.ID) + ", genome: " + str(self.genome) + ", fitness: " + str(self.fitness) + "\n"
     return info
 
+  def __eq__(self, other):
+    return numpy.array_equal(self.genome, other.genome)
+
+  def __hash__(self):
+    return hash(numpy.array_str(self.genome))
+
   def update(self):
     '''Updates the organism's fitness based on its age'''
     if not self.empty:
@@ -93,8 +99,9 @@ class Population:
     self.currentUpdate = 0
     self.orgs = []
     self.pop_size = popsize
-    self.cur_persist = []
-    self.prev_persist = []
+    self.cur_persist = None
+    self.prev_persist = None
+    self.novel_orgs = None
     
 
     for i in range(popsize):
@@ -152,60 +159,50 @@ class Population:
   def getPersistentOrgs(self, history):
     '''A helper function that figures out the genotypes that have persisted since coalescence time.'''
     #We are assuming that the history orgs are saved every coalescence time because it is much easier.
-    cur_pop = history[-1]
-    cur_coal = history[-2]
-    prev_pop = history[-2]
-    if len(history)>2:
-      prev_coal = history[-3]
-    else:
-      prev_coal = history[-2]
+    cur_pop = set(history[-1])
+    cur_coal = set(history[-2])
 
-    for org_1 in cur_pop:
-      for org_2 in cur_coal:
-        if numpy.array_equal(org_1.genome, org_2.genome):
-          self.cur_persist.append(org_1)
-          break
-    for org_3 in prev_pop:
-      for org_4 in prev_coal:
-        if numpy.array_equal(org_3.genome, org_4.genome):
-          self.prev_persist.append(org_3)
-          break
+    self.cur_persist = cur_pop.intersection(cur_coal)
+
+
+    if not self.prev_persist:
+      prev_pop = set(history[-2])
+      if len(history)>2:
+        prev_coal = set(history[-3])
+      else:
+        prev_coal = set(history[-2])
+
+      self.prev_persist = prev_pop.intersection(prev_coal)
+
+    if self.novel_orgs:
+      self.novel_orgs = self.novel_orgs | self.prev_persist
+    else:
+      self.novel_orgs = self.prev_persist
 
   
 
   def changeMetric(self, history):
     '''Measuring the change potential in the population.'''
     self.getPersistentOrgs(history)
+    
+    new_orgs = self.cur_persist - self.prev_persist
 
-    new_count = 0
-    for org_1 in self.cur_persist:
-      match = False
-      for org_2 in self.prev_persist:
-        if numpy.array_equal(org_1.genome, org_2.genome):
-          match = True
-          break
-      if not match:
-        new_count += 1
-    return new_count
+    return len(new_orgs)
 
-  def noveltyMetric(self, history, gen_persist = True):
+  def noveltyMetric(self, history):
     '''Measuring the novelty potential in the population.'''
     #There should probably be a coalescence calculation in here, but I have no idea how to do it.
-    cur_pop = history[-1]
-    new_count = 0
-    for org_1 in cur_pop:
-      match = False
-      for pop in range(len(history)-2, -1, -1):
-        prev_pop = history[pop]
-        for org_2 in prev_pop:
-          if numpy.array_equal(org_1.genome, org_2.genome):
-            match=True
-            break
-        if match:
-          break
-      if not match:
-        new_count +=1
-    return new_count
+    #Make a running set that saves all persistent organisms ever to compare against
+    #Have update set cur and prev persist set to none and then check that
+
+    ##THIS IS BROKEN AND NOT PASSING ITS TEST BUT I DONT KNOW WHY
+
+    if not self.cur_persist:
+      self.getPersistentOrgs(history)
+
+
+
+    return len(self.cur_persist - self.novel_orgs)
 
   def complexityMetric(self):
     '''Measuring the complexity potential in the population.'''
@@ -213,14 +210,16 @@ class Population:
     #Instead, I am going to count the number of 1's for now because they are what contributes to fitness.
     #We can switch to true knockouts once we make a more complicated fitness structure.
     most_complex = 0
-    for org in self.orgs:
+
+    for org in set(self.cur_persist):
       total = numpy.sum(org.genome)
       if total > most_complex:
         most_complex = total
-    return total
+    return most_complex
 
   def ecologyMetric(self):
     '''Measuring the ecology potential in the population.'''
+<<<<<<< HEAD
     distinct_orgs = {}
     for org in self.orgs:
       string_genome = numpy.array_str(org.genome)
@@ -242,25 +241,31 @@ class Population:
       return gen_total/count
     else:
       return 0
+
+    #persistent orgs?
+    return len(set(self.orgs))
+
     
 
-  def noveltyTest(self):
-    '''Verifies that Novelty Metrics are working. 
-    Should print n: 1, n: 0, , n: 0'''
-    sample = [Organism(0,genome=numpy.array([0,0]))]
-    sample_2 = [Organism(0,genome=numpy.array([1,0]))]
-    sample_3 = [Organism(0,genome=numpy.array([0,0]))]
-    sample_4 = [Organism(0,genome=numpy.array([1,0]))]
+def noveltyTest():
+  '''Verifies that Novelty Metrics are working. 
+    Should print n: 0, n: 1, , n: 0'''
+  sample = [Organism(0,genome=numpy.array([0,0]))]
+  sample_2 = [Organism(0,genome=numpy.array([1,0]))]
+  sample_3 = [Organism(0,genome=numpy.array([1,0]))]
+  sample_4 = [Organism(0,genome=numpy.array([1,0]))]
+  
+  history = [sample, sample_2, sample_3, sample_4]
 
-    history = [sample, sample_2, sample_3, sample_4]
+  test_pop = Population(0)
+  for j in range(2,5):
+    test_pop.prev_persist = test_pop.cur_persist
+    test_pop.cur_persist = None
+    print "Novelty: ", test_pop.noveltyMetric(history[:j])
 
-    test_pop = Population(0)
-    for j in range(2,5):
-      print "Novelty: ", test_pop.noveltyMetric(history[:j])
 
 
-
-if len(sys.argv) == 1 or sys.argv[1] == "--help":
+if len(sys.argv) < 4 or sys.argv[1] == "--help":
   print "usage: pop_x pop_y seed"
 else:
 
@@ -287,7 +292,12 @@ else:
     g = population_orgs.avgGen()
     if ((history_gen + coalesce) <= g):
       history.append(copy.deepcopy(population_orgs.orgs))
+
       history_gen = g
+
+      population_orgs.prev_persist = population_orgs.cur_persist
+      population_orgs.cur_persist = None
+
       change = population_orgs.changeMetric(history)
       novelty = population_orgs.noveltyMetric(history)
       complexity = population_orgs.complexityMetric()
