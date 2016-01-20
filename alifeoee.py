@@ -9,6 +9,7 @@ class Organism:
   '''A class to contain an organism'''
   def __init__(self, cellID, genome=[], parent=False, empty=False):
     self.age = 0
+    self.generation = 0
     self.empty = empty
     self.ID = cellID
     self.fitness = 0
@@ -22,6 +23,8 @@ class Organism:
           newGenome.append(parent.genome[i])
         self.genome = newGenome
         self.mutate()
+        self.generation = parent.generation + 1
+        parent.generation = self.generation
         parent.mutate()
         parent.fitness = 0
         parent.age = 0
@@ -226,6 +229,19 @@ class Population:
       else:
         distinct_orgs[string_genome] += 1
     return len(distinct_orgs)
+
+  def avgGen(self):
+    '''Records the average generation of the population.'''
+    gen_total = 0.0
+    count = 0
+    for org in self.orgs:
+      gen_total += org.generation
+      count += 1
+
+    if count > 0:
+      return gen_total/count
+    else:
+      return 0
     
 
   def noveltyTest(self):
@@ -252,30 +268,35 @@ else:
   random.seed(seed)
   numpy.random.seed(seed)
 
-  coalesce = 100
-  num_updates = 20000
+  coalesce = 1000
+  num_gen = 100000
   pop_x = int(sys.argv[1])
   pop_y = int(sys.argv[2])
   pop_size = pop_x*pop_y
 
   data_file = open("test_"+str(seed)+".dat", 'w')
-  data_file.write("Update Change_Metric Novelty_Metric Complexity_Metric Ecology_Metric\n")
-
+  data_file.write("Avg_Gen Change_Metric Novelty_Metric Complexity_Metric Ecology_Metric\n")
+  data_file.close()
   history = []
   population_orgs = Population(pop_size)
   history.append(copy.deepcopy(population_orgs.orgs))
-  for u in range(num_updates):
+  history_gen = 0
+  g = 0
+  while g < num_gen:
     population_orgs.update()
-    if u != 0 and (u%coalesce == 0):
+    g = population_orgs.avgGen()
+    if ((history_gen + coalesce) <= g):
       history.append(copy.deepcopy(population_orgs.orgs))
+      history_gen = g
       change = population_orgs.changeMetric(history)
       novelty = population_orgs.noveltyMetric(history)
       complexity = population_orgs.complexityMetric()
       ecology = population_orgs.ecologyMetric()
-      data_file.write('{} {} {} {} {}\n'.format(u, change, novelty, complexity, ecology))
+      data_file = open("test_"+str(seed)+".dat", 'a')
+      data_file.write('{} {} {} {} {}\n'.format(g, change, novelty, complexity, ecology))
+      data_file.close()
 
 
-  data_file.close()
 
 
 
