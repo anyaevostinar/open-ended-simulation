@@ -7,11 +7,12 @@ import copy
 
 class Organism:
   '''A class to contain an organism'''
-  def __init__(self, cellID, genome=[], parent=False, empty=False):
+  def __init__(self, cellID, genome=[], parent=False, empty=False, lineage = -1):
     self.age = 0
     self.generation = 0
     self.empty = empty
     self.ID = cellID
+    self.lineage = lineage
     self.fitness = 0
     self.genome = genome
     if not self.empty:
@@ -23,6 +24,7 @@ class Organism:
           newGenome.append(parent.genome[i])
         self.genome = newGenome
         self.mutate()
+        self.lineage = parent.lineage
         self.generation = parent.generation + 1
         parent.generation = self.generation
         parent.mutate()
@@ -36,10 +38,15 @@ class Organism:
     return info
 
   def __eq__(self, other):
-    return numpy.array_equal(self.genome, other.genome)
+    if numpy.array_equal(self.genome, other.genome) and (self.lineage == other.lineage):
+      return True
+    else:
+      return False
 
   def __hash__(self):
-    return hash(numpy.array_str(self.genome))
+    full = numpy.array_str(self.genome) + str(self.lineage)
+    return hash(full)
+
 
   def update(self):
     '''Updates the organism's fitness based on its age'''
@@ -99,18 +106,18 @@ class Population:
     self.currentUpdate = 0
     self.orgs = []
     self.pop_size = popsize
-    self.cur_persist = None
-    self.prev_persist = None
-    self.novel_orgs = None
+    self.cur_persist = set()
+    self.prev_persist = set()
+    self.novel_orgs = set()
     
 
     for i in range(popsize):
-      self.orgs.append(self.makeOrg())
+      self.orgs.append(self.makeOrg(i))
 
-  def makeOrg(self):
+  def makeOrg(self, lineage):
     '''A function to make a new organism randomly'''
     randomBitArray = numpy.random.randint(2, size=(100,))
-    newOrg = Organism(len(self.orgs), genome=randomBitArray)
+    newOrg = Organism(len(self.orgs), genome=randomBitArray, lineage = lineage)
     return newOrg
 
   def reproduceOrg(self, org):
@@ -161,48 +168,76 @@ class Population:
     #We are assuming that the history orgs are saved every coalescence time because it is much easier.
     cur_pop = set(history[-1])
     cur_coal = set(history[-2])
+    persist_lin_cur = set()
+  
 
-    self.cur_persist = cur_pop.intersection(cur_coal)
+    for org in cur_pop:
+      persist_lin_cur.add(org.lineage)
+
+    for org in cur_coal:
+      if org.lineage in persist_lin_cur:
+        self.cur_persist.add(org)
 
 
     if not self.prev_persist:
       prev_pop = set(history[-2])
-      if len(history)>2:
-        prev_coal = set(history[-3])
-      else:
-        prev_coal = set(history[-2])
+      assert(len(history)>2)
+      prev_coal = set(history[-3])
 
-      self.prev_persist = prev_pop.intersection(prev_coal)
+      persist_lin_prev = set()
+      for org in prev_pop:
+        persist_lin_prev.add(org.lineage)
 
+      for org in prev_coal:
+        if org.lineage in persist_lin_prev:
+          self.prev_persist.add(org)
+        
+    #Update the list of all genomes we've seen (some duplicates if two lineages have same genome)
     if self.novel_orgs:
       self.novel_orgs = self.novel_orgs | self.prev_persist
     else:
       self.novel_orgs = self.prev_persist
 
-  
+    #Now we have to reset the organism lineages to prepare for next cycle
+    for i in range(len(self.orgs)):
+      self.orgs[i].lineage = i
+      
 
   def changeMetric(self, history):
     '''Measuring the change potential in the population.'''
     self.getPersistentOrgs(history)
     
-    new_orgs = self.cur_persist - self.prev_persist
+    new_orgs = set()
+
+    #we have to do nested for loops to do direct genome comparisons and not take organism lineage into account
+    for org_1 in self.cur_persist:
+      match = False
+      for org_2 in self.prev_persist:
+        if numpy.array_equal(org_1.genome, org_2.genome):
+          match = True
+          break
+      if not match:
+        new_orgs.add(org_1)
 
     return len(new_orgs)
 
   def noveltyMetric(self, history):
     '''Measuring the novelty potential in the population.'''
-    #There should probably be a coalescence calculation in here, but I have no idea how to do it.
-    #Make a running set that saves all persistent organisms ever to compare against
-    #Have update set cur and prev persist set to none and then check that
-
-    ##THIS IS BROKEN AND NOT PASSING ITS TEST BUT I DONT KNOW WHY
-
     if not self.cur_persist:
       self.getPersistentOrgs(history)
 
+    novel = set()
+    for org_1 in self.cur_persist:
+      match = False
+      for org_2 in self.novel_orgs:
+        if numpy.array_equal(org_1.genome, org_2.genome):
+          match = True
+          break
+      if not match:
+        novel.add(org_1)
 
-
-    return len(self.cur_persist - self.novel_orgs)
+    #might be able to add novel to self.novel_orgs now?
+    return len(novel)
 
   def complexityMetric(self):
     '''Measuring the complexity potential in the population.'''
@@ -211,7 +246,7 @@ class Population:
     #We can switch to true knockouts once we make a more complicated fitness structure.
     most_complex = 0
 
-    for org in set(self.cur_persist):
+    for org in set(self.orgs):
       total = numpy.sum(org.genome)
       if total > most_complex:
         most_complex = total
@@ -219,14 +254,7 @@ class Population:
 
   def ecologyMetric(self):
     '''Measuring the ecology potential in the population.'''
-    distinct_orgs = {}
-    for org in self.orgs:
-      string_genome = numpy.array_str(org.genome)
-      if string_genome not in distinct_orgs:
-        distinct_orgs[string_genome] = 1
-      else:
-        distinct_orgs[string_genome] += 1
-    return len(distinct_orgs)
+    return len(set(self.orgs))
 
   def avgGen(self):
     '''Records the average generation of the population.'''
@@ -241,7 +269,6 @@ class Population:
     else:
       return 0
 
-    #persistent orgs?
     return len(set(self.orgs))
 
     
@@ -249,17 +276,17 @@ class Population:
 def noveltyTest():
   '''Verifies that Novelty Metrics are working. 
     Should print n: 0, n: 1, , n: 0'''
-  sample = [Organism(0,genome=numpy.array([0,0]))]
-  sample_2 = [Organism(0,genome=numpy.array([1,0]))]
-  sample_3 = [Organism(0,genome=numpy.array([1,0]))]
-  sample_4 = [Organism(0,genome=numpy.array([1,0]))]
+  sample = [Organism(0,genome=numpy.array([0,0]), lineage=0)]
+  sample_2 = [Organism(0,genome=numpy.array([1,0]), lineage =0)]
+  sample_3 = [Organism(0,genome=numpy.array([1,0]),lineage = 0)]
+  sample_4 = [Organism(0,genome=numpy.array([1,0]), lineage=0)]
   
   history = [sample, sample_2, sample_3, sample_4]
 
   test_pop = Population(0)
-  for j in range(2,5):
+  for j in range(3,5):
     test_pop.prev_persist = test_pop.cur_persist
-    test_pop.cur_persist = None
+    test_pop.cur_persist = set()
     print "Novelty: ", test_pop.noveltyMetric(history[:j])
 
 
@@ -295,15 +322,18 @@ else:
       history_gen = g
 
       population_orgs.prev_persist = population_orgs.cur_persist
-      population_orgs.cur_persist = None
+      population_orgs.cur_persist = set()
 
-      change = population_orgs.changeMetric(history)
-      novelty = population_orgs.noveltyMetric(history)
-      complexity = population_orgs.complexityMetric()
-      ecology = population_orgs.ecologyMetric()
-      data_file = open("test_"+str(seed)+".dat", 'a')
-      data_file.write('{} {} {} {} {}\n'.format(g, change, novelty, complexity, ecology))
-      data_file.close()
+      if len(history)>2:
+        #Metrics don't make sense until we have three time slices
+        change = population_orgs.changeMetric(history)
+        novelty = population_orgs.noveltyMetric(history)
+        complexity = population_orgs.complexityMetric()
+        ecology = population_orgs.ecologyMetric()
+        data_file = open("test_"+str(seed)+".dat", 'a')
+        data_file.write('{} {} {} {} {}\n'.format(g, change, novelty, complexity, ecology))
+        data_file.close()
+
 
 
 
