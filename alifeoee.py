@@ -7,7 +7,7 @@ import copy
 
 class Organism:
   '''A class to contain an organism'''
-  def __init__(self, cellID, genome=[], parent=False, empty=False, lineage = -1):
+  def __init__(self, cellID, genome=numpy.array([]), parent=None, empty=False, lineage = -1):
     self.age = 0
     self.generation = 0
     self.empty = empty
@@ -17,33 +17,29 @@ class Organism:
     self.fitness = 0
     self.genome = genome
     if not self.empty:
+      # Making assert instead of printing error
+      assert len(genome) or parent, "Must have a genome or parent set"
       if len(genome):
         self.genome = genome
-      elif parent:
-        newGenome =[]
-        for i in range(len(parent.genome)):
-          newGenome.append(parent.genome[i])
-        self.genome = newGenome
+      else:
+        self.genome = parent.genome[:]
         self.mutate()
         self.lineage = parent.lineage
-        self.prev_lineage = parent.prev_lineage
-        self.generation = parent.generation + 1
-        parent.generation = self.generation
+        parent.generation += 1
+        self.generation = parent.generation
         parent.mutate()
         parent.fitness = 0
         parent.age = 0
-      else:
-        print "fail"
-
+        
   def __repr__(self):
-    info = "lineage " + str(self.lineage) + ", ID: " + str(self.ID) + ", genome: " + str(self.genome) + ", fitness: " + str(self.fitness) + "\n"
-    return info
+    # Using string formatting
+    return "empty: {}, ID: {}, genome: {}, fitness: {}\n".format(self.empty, self.ID, self.genome, self.fitness)
+
 
   def __eq__(self, other):
-    if numpy.array_equal(self.genome, other.genome) and (self.lineage == other.lineage):
-      return True
-    else:
-      return False
+    # Boolean Zen
+    return numpy.array_equal(self.genome, other.genome) and (self.lineage == other.lineage)
+
 
   def __hash__(self):
     full = numpy.array_str(self.genome) + str(self.lineage)
@@ -54,16 +50,17 @@ class Organism:
     '''Updates the organism's fitness based on its age'''
     if not self.empty:
       self.age += 1
-      cur_gene = self.genome[self.age%len(self.genome)]
+      cur_gene = self.genome[self.age % len(self.genome)]
       self.fitness += cur_gene
       return True
-    else:
-      return False
+    # Removed unneeded else
+    return False
       
 
   def mutate(self):
     newGenome = numpy.copy(self.genome)
     for i in range(len(newGenome)):
+      # Magic Number :(
       if random.random() < .007:
         if newGenome[i] == 0:
           newGenome[i] = 1
@@ -311,6 +308,7 @@ else:
   numpy.random.seed(seed)
 
   coalesce = 1000
+  
   num_gen = 100000
   pop_x = int(sys.argv[1])
   pop_y = int(sys.argv[2])
