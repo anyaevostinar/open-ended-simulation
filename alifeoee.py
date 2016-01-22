@@ -178,11 +178,6 @@ class Population:
     for org in cur_pop:
       persist_lin_cur.add(org.lineage)
 
-    print "_______persist_lin_cur-----------"
-    print persist_lin_cur
-
-    print "-----------cur_coal----------"
-    print cur_coal
 
     for org in cur_coal:
       if org.lineage in persist_lin_cur:
@@ -222,8 +217,6 @@ class Population:
       if not match:
         new_orgs.add(org_1)
 
-    print "change funcation: "
-    print self.cur_persist
     return len(new_orgs)
 
   def noveltyMetric(self, history):
@@ -345,15 +338,13 @@ else:
       if len(history)>2:
         #Metrics don't make sense until we have three time slices
         change = population_orgs.changeMetric(history)
-        print "----------------main loop-----------------"
-        print population_orgs.cur_persist
         novelty = population_orgs.noveltyMetric(history)
         complexity = population_orgs.complexityMetric()
         ecology = population_orgs.ecologyMetric()
         data_file = open("test_"+str(seed)+".dat", 'a')
         data_file.write('{} {} {} {} {}\n'.format(g, change, novelty, complexity, ecology))
         data_file.close()
-        print "Data!", g
+
       elif len(history)==2:
         population_orgs.getPersistentOrgs(history)
 
