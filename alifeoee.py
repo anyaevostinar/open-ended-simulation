@@ -254,7 +254,13 @@ class Population:
 
   def ecologyMetric(self):
     '''Measuring the ecology potential in the population.'''
-    return len(set(self.orgs))
+
+    unique_gen = set()
+    for org in self.orgs:
+      if numpy.array_str(org.genome) not in unique_gen:
+        unique_gen.add(numpy.array_str(org.genome))
+
+    return len(unique_gen)
 
   def avgGen(self):
     '''Records the average generation of the population.'''
@@ -333,7 +339,7 @@ else:
         data_file = open("test_"+str(seed)+".dat", 'a')
         data_file.write('{} {} {} {} {}\n'.format(g, change, novelty, complexity, ecology))
         data_file.close()
-
+        print "Data!", g
 
 
 
