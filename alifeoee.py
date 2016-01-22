@@ -13,6 +13,7 @@ class Organism:
     self.empty = empty
     self.ID = cellID
     self.lineage = lineage
+    self.prev_lineage = lineage
     self.fitness = 0
     self.genome = genome
     if not self.empty:
@@ -25,6 +26,7 @@ class Organism:
         self.genome = newGenome
         self.mutate()
         self.lineage = parent.lineage
+        self.prev_lineage = parent.prev_lineage
         self.generation = parent.generation + 1
         parent.generation = self.generation
         parent.mutate()
@@ -34,7 +36,7 @@ class Organism:
         print "fail"
 
   def __repr__(self):
-    info = "empty: " + str(self.empty) + ", ID: " + str(self.ID) + ", genome: " + str(self.genome) + ", fitness: " + str(self.fitness) + "\n"
+    info = "lineage " + str(self.lineage) + ", ID: " + str(self.ID) + ", genome: " + str(self.genome) + ", fitness: " + str(self.fitness) + "\n"
     return info
 
   def __eq__(self, other):
@@ -166,6 +168,8 @@ class Population:
   def getPersistentOrgs(self, history):
     '''A helper function that figures out the genotypes that have persisted since coalescence time.'''
     #We are assuming that the history orgs are saved every coalescence time because it is much easier.
+
+
     cur_pop = set(history[-1])
     cur_coal = set(history[-2])
     persist_lin_cur = set()
@@ -174,39 +178,38 @@ class Population:
     for org in cur_pop:
       persist_lin_cur.add(org.lineage)
 
+    print "_______persist_lin_cur-----------"
+    print persist_lin_cur
+
+    print "-----------cur_coal----------"
+    print cur_coal
+
     for org in cur_coal:
       if org.lineage in persist_lin_cur:
         self.cur_persist.add(org)
 
 
-    if not self.prev_persist:
-      prev_pop = set(history[-2])
-      assert(len(history)>2)
-      prev_coal = set(history[-3])
-
-      persist_lin_prev = set()
-      for org in prev_pop:
-        persist_lin_prev.add(org.lineage)
-
-      for org in prev_coal:
-        if org.lineage in persist_lin_prev:
-          self.prev_persist.add(org)
-        
-    #Update the list of all genomes we've seen (some duplicates if two lineages have same genome)
-    if self.novel_orgs:
-      self.novel_orgs = self.novel_orgs | self.prev_persist
-    else:
-      self.novel_orgs = self.prev_persist
-
     #Now we have to reset the organism lineages to prepare for next cycle
     for i in range(len(self.orgs)):
       self.orgs[i].lineage = i
+      history[-1][i].lineage = i
+
+
+  def getNovelOrgs(self):
+    #Update the list of all genomes we've seen (some duplicates if two lineages have same genome)
+    #make this store actual genomes instead of organisms
+    if self.novel_orgs:
+      self.novel_orgs.update(self.prev_persist)
+    else:
+      self.novel_orgs = self.prev_persist
       
 
   def changeMetric(self, history):
     '''Measuring the change potential in the population.'''
     self.getPersistentOrgs(history)
-    
+    assert self.prev_persist, "prev_persist must exist"    
+    self.getNovelOrgs()
+
     new_orgs = set()
 
     #we have to do nested for loops to do direct genome comparisons and not take organism lineage into account
@@ -219,6 +222,8 @@ class Population:
       if not match:
         new_orgs.add(org_1)
 
+    print "change funcation: "
+    print self.cur_persist
     return len(new_orgs)
 
   def noveltyMetric(self, history):
@@ -294,8 +299,15 @@ def noveltyTest():
     test_pop.prev_persist = test_pop.cur_persist
     test_pop.cur_persist = set()
     print "Novelty: ", test_pop.noveltyMetric(history[:j])
+    print "Change: ", test_pop.changeMetric(history[:j])
 
 
+def multiLineageTest():
+  '''Test multiple lineages.'''
+  sample_1 = [Organism(0, genome=numpy.array([0,0]), lineage=0), Organism(0, genome = numpy.array([1,1]), lineage=1)]
+  sample_2 = [Organism(0, genome=numpy.array([0,0]), lineage=0), Organism(0, genome = numpy.array([1,1]), lineage=1)]
+  sample_3 = [Organism(0, genome=numpy.array([0,1]), lineage=1), Organism(0, genome = numpy.array([1,1]), lineage=1)]
+  sample_4 = [Organism(0, genome=numpy.array([0,1]), lineage=1), Organism(0, genome = numpy.array([1,1]), lineage=1)]
 
 if len(sys.argv) < 4 or sys.argv[1] == "--help":
   print "usage: pop_x pop_y seed"
@@ -333,6 +345,8 @@ else:
       if len(history)>2:
         #Metrics don't make sense until we have three time slices
         change = population_orgs.changeMetric(history)
+        print "----------------main loop-----------------"
+        print population_orgs.cur_persist
         novelty = population_orgs.noveltyMetric(history)
         complexity = population_orgs.complexityMetric()
         ecology = population_orgs.ecologyMetric()
@@ -340,6 +354,9 @@ else:
         data_file.write('{} {} {} {} {}\n'.format(g, change, novelty, complexity, ecology))
         data_file.close()
         print "Data!", g
+      elif len(history)==2:
+        population_orgs.getPersistentOrgs(history)
+
 
 
 
