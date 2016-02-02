@@ -48,24 +48,33 @@ class Organism:
 
   def update(self):
     '''Updates the organism's fitness based on its age'''
-    if not self.empty:
+    if not self.empty and len(self.genome):
       self.age += 1
       cur_gene = self.genome[self.age % len(self.genome)]
       self.fitness += cur_gene
       return True
-    # Removed unneeded else
+
     return False
       
 
   def mutate(self):
     newGenome = numpy.copy(self.genome)
-    for i in range(len(newGenome)):
-      # Magic Number :(
-      if random.random() < .007:
+    i  =0
+    genome_length = len(newGenome)
+    while i<genome_length:
+      if random.random() < 0.0035:
         if newGenome[i] == 0:
           newGenome[i] = 1
         else:
           newGenome[i] = 0
+      if random.random() < 0.00175:
+        newGenome = numpy.delete(newGenome, i)
+        i -= 1
+      elif random.random() < 0.00175:
+        newGenome = numpy.insert(newGenome, i, int(random.getrandbits(1)))
+        i += 1
+      i+= 1
+      genome_length = len(newGenome)
     self.genome = newGenome
 
     
@@ -143,7 +152,7 @@ class Population:
     for org in self.orgs:
       if not org.empty:
         result = org.update()
-        if org.fitness >= len(org.genome):
+        if org.fitness >= 100:
           self.reproduceOrg(org)
 
 
@@ -240,12 +249,13 @@ class Population:
     #Instead, I am going to count the number of 1's for now because they are what contributes to fitness.
     #We can switch to true knockouts once we make a more complicated fitness structure.
     most_complex = 0
-
+    length = 0
     for org in set(self.orgs):
       total = numpy.sum(org.genome)
       if total > most_complex:
         most_complex = total
-    return most_complex
+        length = len(org.genome)
+    return most_complex, length
 
   def ecologyMetric(self):
     '''Measuring the ecology potential in the population.'''
@@ -314,10 +324,10 @@ else:
   pop_y = int(sys.argv[2])
   pop_size = pop_x*pop_y
 
-  data_file_name = 'test3_'
+  data_file_name = 'indel2_'
 
   data_file = open(data_file_name+str(seed)+".dat", 'w')
-  data_file.write("Avg_Gen Change_Metric Novelty_Metric Complexity_Metric Ecology_Metric\n")
+  data_file.write("Avg_Gen Change_Metric Novelty_Metric Complexity_Metric Ecology_Metric Complex_Length\n")
   data_file.close()
   history = []
   population_orgs = Population(pop_size)
@@ -339,10 +349,10 @@ else:
         #Metrics don't make sense until we have three time slices
         change = population_orgs.changeMetric(history)
         novelty = population_orgs.noveltyMetric(history)
-        complexity = population_orgs.complexityMetric()
+        complexity,length = population_orgs.complexityMetric()
         ecology = population_orgs.ecologyMetric()
         data_file = open(data_file_name+str(seed)+".dat", 'a')
-        data_file.write('{} {} {} {} {}\n'.format(g, change, novelty, complexity, ecology))
+        data_file.write('{} {} {} {} {} {}\n'.format(g, change, novelty, complexity, ecology, length))
         data_file.close()
 
       elif len(history)==2:
